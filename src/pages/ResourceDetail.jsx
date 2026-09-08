@@ -1,25 +1,57 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import BackLink from '../components/BackLink';
+import { RatingStars } from '../components/ResourceCard';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
 
 export default function ResourceDetail() {
   const { id } = useParams();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const [resource, setResource] = useState(null);
   const [till, setTill] = useState(null);
   const [order, setOrder] = useState(null);
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('idle'); // idle | starting | awaiting_code | submitted | purchased | error
   const [error, setError] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [canReview, setCanReview] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const pollRef = useRef(null);
 
   useEffect(() => {
     api.get(`/resources/${id}`).then((res) => setResource(res.resource));
     api.get('/payments/manual/info').then(setTill);
+    api.get(`/resources/${id}/reviews`).then((res) => setReviews(res.reviews));
+
+    if (session && profile?.role === 'student') {
+      api.get('/orders/mine').then((res) => {
+        setCanReview((res.orders || []).some((o) => o.resource?.id === id && o.status === 'paid'));
+      });
+    }
+
     return () => clearInterval(pollRef.current);
-  }, [id]);
+  }, [id, session, profile]);
+
+  async function toggleSave() {
+    if (!session) return (window.location.href = '/login');
+    if (saved) {
+      await api.delete(`/resources/${id}/save`);
+      setSaved(false);
+    } else {
+      await api.post(`/resources/${id}/save`, {});
+      setSaved(true);
+    }
+  }
+
+  async function submitReview(e) {
+    e.preventDefault();
+    const res = await api.post(`/resources/${id}/reviews`, reviewForm);
+    setReviews((r) => [res.review, ...r]);
+    setCanReview(false);
+  }
 
   function pollOrder(orderId) {
     pollRef.current = setInterval(async () => {
@@ -66,8 +98,28 @@ export default function ResourceDetail() {
     <div>
       <Navbar />
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-semibold">{resource.title}</h1>
-        <p className="text-muted mt-2">By {resource.teacher?.full_name}</p>
+        <BackLink to="/marketplace" label="Back to marketplace" />
+
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold">{resource.title}</h1>
+            <p className="text-muted mt-2">By {resource.teacher?.full_name}</p>
+            {resource.rating && (
+              <div className="mt-2">
+                <RatingStars value={resource.rating.avg} count={resource.rating.count} size="md" />
+              </div>
+            )}
+          </div>
+          {profile?.role !== 'teacher' && (
+            <button
+              onClick={toggleSave}
+              className="text-sm border border-border px-3 py-1.5 rounded-md hover:border-accent whitespace-nowrap"
+            >
+              {saved ? 'Saved' : 'Save'}
+            </button>
+          )}
+        </div>
+
         <p className="mt-6 leading-relaxed">{resource.description}</p>
 
         <div className="mt-8 bg-surface border border-border rounded-lg p-6">
@@ -123,6 +175,53 @@ export default function ResourceDetail() {
 
         {status === 'error' && <p className="text-sm text-red-400 mt-3">{error}</p>}
         {status === 'purchased' && <p className="text-sm text-accent mt-3">Payment confirmed. Go to your dashboard to download this resource.</p>}
+
+        <section className="mt-12">
+          <h2 className="text-lg font-medium mb-4">Reviews</h2>
+
+          {canReview && (
+            <form onSubmit={submitReview} className="bg-surface border border-border rounded-lg p-4 mb-5 space-y-3">
+              <p className="text-sm font-medium">Leave a review</p>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setReviewForm({ ...reviewForm, rating: n })}
+                    className={n <= reviewForm.rating ? 'text-accent' : 'text-muted'}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+              <textarea
+                placeholder="What did you think? (optional)"
+                value={reviewForm.comment}
+                onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                className="w-full bg-surface2 border border-border rounded-md px-3 py-2 text-sm h-20 focus:border-accent outline-none"
+              />
+              <button type="submit" className="text-sm bg-accent text-bg font-medium px-4 py-1.5 rounded-md">
+                Submit review
+              </button>
+            </form>
+          )}
+
+          {reviews.length === 0 ? (
+            <p className="text-sm text-muted">No reviews yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {reviews.map((r) => (
+                <div key={r.id} className="bg-surface border border-border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{r.student?.full_name}</p>
+                    <span className="text-accent text-sm">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                  </div>
+                  {r.comment && <p className="text-sm text-muted mt-2">{r.comment}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
