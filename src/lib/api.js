@@ -6,7 +6,7 @@ async function doFetch(path, options, token) {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(options.isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -46,6 +46,9 @@ export const api = {
   post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  // For file/image uploads (FormData bodies) — same 401-refresh-and-retry
+  // behavior as get/post/put, which raw fetch() calls don't get.
+  upload: (path, formData) => request(path, { method: 'POST', body: formData, isFormData: true }),
 };
 
 export async function getAccessToken() {
