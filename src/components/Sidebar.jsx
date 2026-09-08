@@ -84,5 +84,5 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
         </nav>
       </aside>
     </>
-  );
+  )
 }
