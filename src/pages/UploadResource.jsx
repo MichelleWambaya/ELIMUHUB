@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { supabase } from '../lib/supabaseClient';
 import BackLink from '../components/BackLink';
 
 export default function UploadResource() {
@@ -27,11 +26,6 @@ export default function UploadResource() {
     api.get('/taxonomy').then(setTaxonomy);
   }, []);
 
-  async function authHeader() {
-    const { data } = await supabase.auth.getSession();
-    return { Authorization: `Bearer ${data.session?.access_token}` };
-  }
-
   async function handleCreateDraft(e) {
     e.preventDefault();
     setError('');
@@ -55,13 +49,7 @@ export default function UploadResource() {
     try {
       const body = new FormData();
       body.append('file', file);
-      const res = await fetch(`/api/resources/${resourceId}/files`, {
-        method: 'POST',
-        headers: await authHeader(),
-        body,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await api.upload(`/resources/${resourceId}/files`, body);
       setUploadedFiles((f) => [...f, data.file]);
       setFile(null);
     } catch (err) {
@@ -77,13 +65,7 @@ export default function UploadResource() {
     try {
       const body = new FormData();
       body.append('cover', cover);
-      const res = await fetch(`/api/resources/${resourceId}/cover`, {
-        method: 'POST',
-        headers: await authHeader(),
-        body,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      await api.upload(`/resources/${resourceId}/cover`, body);
       setCover(null);
     } catch (err) {
       setError(err.message);
