@@ -22,7 +22,7 @@ export async function requireAuth(req, res, next) {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, full_name, role')
+    .select('id, full_name, role, avatar_url')
     .eq('id', data.user.id)
     .single();
 
