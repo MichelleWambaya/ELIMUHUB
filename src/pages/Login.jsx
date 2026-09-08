@@ -11,9 +11,16 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return setError(error.message);
-    navigate('/dashboard');
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+
+    navigate(profile?.role === 'admin' ? '/admin' : '/dashboard');
   }
 
   return (
