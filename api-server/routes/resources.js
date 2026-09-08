@@ -6,6 +6,21 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 export const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
+// Attaches { rating: { avg, count } } to each resource from the
+// resource_ratings view, without needing a slow per-row join.
+async function withRatings(resources) {
+  const ids = resources.map((r) => r.id);
+  if (ids.length === 0) return resources;
+
+  const { data: ratings } = await supabase.from('resource_ratings').select('*').in('resource_id', ids);
+  const byId = Object.fromEntries((ratings || []).map((r) => [r.resource_id, r]));
+
+  return resources.map((r) => ({
+    ...r,
+    rating: byId[r.id] ? { avg: Number(byId[r.id].avg_rating), count: byId[r.id].review_count } : null,
+  }));
+}
+
 // Public marketplace: only approved resources, real data only.
 router.get('/', async (req, res) => {
   const { subject_id, education_level_id, category_id, q } = req.query;
@@ -25,21 +40,105 @@ router.get('/', async (req, res) => {
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ resources: data });
+  res.json({ resources: await withRatings(data) });
 });
 
 router.get('/:id', async (req, res) => {
   const { data, error } = await supabase
     .from('resources')
     .select(
-      'id, title, description, price_kes, status, cover_image_path, preview_file_path, created_at, updated_at, teacher:teacher_id(id, full_name)'
+      'id, title, description, price_kes, status, cover_image_path, preview_file_path, created_at, updated_at, teacher:teacher_id(id, full_name), subjects:subject_id(name), education_levels:education_level_id(name), categories:category_id(name)'
     )
     .eq('id', req.params.id)
     .eq('status', 'approved')
     .single();
 
   if (error || !data) return res.status(404).json({ error: 'Resource not found.' });
-  res.json({ resource: data });
+  const [withRating] = await withRatings([data]);
+  res.json({ resource: withRating });
+});
+
+// Reviews — public read, only a student who actually bought the
+// resource can post one, and only once.
+router.get('/:id/reviews', async (req, res) => {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, rating, comment, created_at, student:student_id(full_name)')
+    .eq('resource_id', req.params.id)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ reviews: data });
+});
+
+router.post('/:id/reviews', requireAuth, requireRole('student'), async (req, res) => {
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
+  }
+
+  const { data: entitlement } = await supabase
+    .from('entitlements')
+    .select('id')
+    .eq('student_id', req.user.id)
+    .eq('resource_id', req.params.id)
+    .maybeSingle();
+
+  if (!entitlement) {
+    return res.status(403).json({ error: 'You can only review a resource you have purchased.' });
+  }
+
+  const { data: existing } = await supabase
+    .from('reviews')
+    .select('id')
+    .eq('resource_id', req.params.id)
+    .eq('student_id', req.user.id)
+    .maybeSingle();
+
+  if (existing) return res.status(400).json({ error: 'You have already reviewed this resource.' });
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .insert({ resource_id: req.params.id, student_id: req.user.id, rating, comment })
+    .select('id, rating, comment, created_at, student:student_id(full_name)')
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json({ review: data });
+});
+
+// Saved resources ("Saved" page) — a student's private shortlist.
+router.get('/saved/mine', requireAuth, requireRole('student'), async (req, res) => {
+  const { data, error } = await supabase
+    .from('saved_resources')
+    .select('id, created_at, resource:resource_id(id, title, price_kes, cover_image_path, status)')
+    .eq('student_id', req.user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ saved: data });
+});
+
+router.post('/:id/save', requireAuth, requireRole('student'), async (req, res) => {
+  const { data, error } = await supabase
+    .from('saved_resources')
+    .upsert({ student_id: req.user.id, resource_id: req.params.id }, { onConflict: 'student_id,resource_id' })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json({ saved: data });
+});
+
+router.delete('/:id/save', requireAuth, requireRole('student'), async (req, res) => {
+  const { error } = await supabase
+    .from('saved_resources')
+    .delete()
+    .eq('student_id', req.user.id)
+    .eq('resource_id', req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ removed: true });
 });
 
 // Teacher: create a draft resource.
