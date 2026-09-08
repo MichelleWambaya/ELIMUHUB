@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('id, full_name, role').eq('id', userId).single();
+    const { data } = await supabase.from('profiles').select('id, full_name, role, avatar_url').eq('id', userId).single();
     setProfile(data);
     setLoading(false);
   }
