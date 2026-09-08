@@ -37,8 +37,12 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   }
 
+  function updateProfile(patch) {
+    setProfile((p) => ({ ...p, ...patch }));
+  }
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
