@@ -11,24 +11,44 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState(defaultRole);
   const [error, setError] = useState('');
+  const [checkEmail, setCheckEmail] = useState(false);
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // full_name and role travel in the signup metadata rather than a
+    // separate insert from the browser — a database trigger (see
+    // supabase/fixes.sql) creates the profiles row itself from this data,
+    // so it happens reliably even for users created outside this form.
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, role } },
+    });
     if (error) return setError(error.message);
 
-    const userId = data.user?.id;
-    if (userId) {
-      await supabase.from('profiles').insert({ id: userId, full_name: fullName, role });
-      if (role === 'teacher') {
-        await supabase.from('teacher_profiles').insert({ user_id: userId });
-      }
+    if (!data.session) {
+      // Email confirmation is on for this project — there's no session
+      // yet, so sending them to a protected route would just bounce to
+      // /login. Tell them what's actually happening instead.
+      setCheckEmail(true);
+      return;
     }
 
     navigate('/dashboard');
+  }
+
+  if (checkEmail) {
+    return (
+      <div className="max-w-sm mx-auto mt-24 px-6 text-center">
+        <h1 className="text-2xl font-semibold">Check your email</h1>
+        <p className="text-muted mt-3 text-sm">
+          We sent a confirmation link to {email}. Click it, then come back and log in.
+        </p>
+      </div>
+    );
   }
 
   return (
