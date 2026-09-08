@@ -8,11 +8,17 @@ export default function Bookings() {
   const { profile } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState('');
 
   async function load() {
-    const res = await api.get('/tutors/bookings/mine');
-    setBookings(res.bookings);
-    setLoaded(true);
+    try {
+      const res = await api.get('/tutors/bookings/mine');
+      setBookings(res.bookings);
+    } catch (err) {
+      setError(err.message || 'Could not load bookings.');
+    } finally {
+      setLoaded(true);
+    }
   }
 
   useEffect(() => {
@@ -33,6 +39,8 @@ export default function Bookings() {
 
       {!loaded ? (
         <p className="text-muted">Loading...</p>
+      ) : error ? (
+        <p className="text-sm text-red-400">{error}</p>
       ) : bookings.length === 0 ? (
         <EmptyState message="No bookings yet." actionLabel={isTutor ? undefined : 'Find a tutor'} onAction={isTutor ? undefined : () => (window.location.href = '/tutors')} />
       ) : (
