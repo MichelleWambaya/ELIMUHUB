@@ -7,11 +7,17 @@ import BackLink from '../components/BackLink';
 export default function Saved() {
   const [saved, setSaved] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState('');
 
   async function load() {
-    const res = await api.get('/resources/saved/mine');
-    setSaved(res.saved);
-    setLoaded(true);
+    try {
+      const res = await api.get('/resources/saved/mine');
+      setSaved(res.saved);
+    } catch (err) {
+      setError(err.message || 'Could not load saved resources.');
+    } finally {
+      setLoaded(true);
+    }
   }
 
   useEffect(() => {
@@ -30,6 +36,8 @@ export default function Saved() {
 
       {!loaded ? (
         <p className="text-muted">Loading...</p>
+      ) : error ? (
+        <p className="text-sm text-red-400">{error}</p>
       ) : saved.length === 0 ? (
         <EmptyState message="Resources you save will show up here." actionLabel="Browse resources" onAction={() => (window.location.href = '/marketplace')} />
       ) : (
