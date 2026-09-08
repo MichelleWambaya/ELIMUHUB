@@ -19,12 +19,13 @@ export default function ResourceDetail() {
   const [canReview, setCanReview] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
+  const [loadError, setLoadError] = useState('');
   const pollRef = useRef(null);
 
   useEffect(() => {
-    api.get(`/resources/${id}`).then((res) => setResource(res.resource));
-    api.get('/payments/manual/info').then(setTill);
-    api.get(`/resources/${id}/reviews`).then((res) => setReviews(res.reviews));
+    api.get(`/resources/${id}`).then((res) => setResource(res.resource)).catch((err) => setLoadError(err.message || 'Could not load this resource.'));
+    api.get('/payments/manual/info').then(setTill).catch(() => {});
+    api.get(`/resources/${id}/reviews`).then((res) => setReviews(res.reviews)).catch(() => {});
 
     if (session && profile?.role === 'student') {
       api.get('/orders/mine').then((res) => {
@@ -92,6 +93,7 @@ export default function ResourceDetail() {
     }
   }
 
+  if (loadError) return <p className="text-sm text-red-400 px-6 py-10">{loadError}</p>;
   if (!resource) return <p className="text-muted px-6 py-10">Loading...</p>;
 
   return (
