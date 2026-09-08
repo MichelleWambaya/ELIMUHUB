@@ -4,6 +4,27 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const router = express.Router();
 
+// Lets an existing student account become a teacher without re-registering.
+// Flips profiles.role and creates the teacher_profiles row if it's missing.
+router.post('/become', requireAuth, async (req, res) => {
+  if (req.user.role === 'teacher') {
+    return res.json({ already_teacher: true });
+  }
+  if (req.user.role === 'admin') {
+    return res.status(400).json({ error: 'Admin accounts cannot become teachers.' });
+  }
+
+  const { error: roleError } = await supabase.from('profiles').update({ role: 'teacher' }).eq('id', req.user.id);
+  if (roleError) return res.status(500).json({ error: roleError.message });
+
+  const { error: teacherError } = await supabase
+    .from('teacher_profiles')
+    .upsert({ user_id: req.user.id }, { onConflict: 'user_id', ignoreDuplicates: true });
+  if (teacherError) return res.status(500).json({ error: teacherError.message });
+
+  res.status(201).json({ became_teacher: true });
+});
+
 router.get('/dashboard', requireAuth, requireRole('teacher'), async (req, res) => {
   const teacherId = req.user.id;
 
