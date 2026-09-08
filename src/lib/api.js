@@ -1,52 +1,52 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../lib/api';
-import EmptyState from '../components/EmptyState';
-import BackLink from '../components/BackLink';
+import { supabase } from './supabaseClient';
 
-export default function Saved() {
-  const [saved, setSaved] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-  async function load() {
-    const res = await api.get('/resources/saved/mine');
-    setSaved(res.saved);
-    setLoaded(true);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function remove(resourceId) {
-    await api.delete(`/resources/${resourceId}/save`);
-    setSaved((s) => s.filter((item) => item.resource.id !== resourceId));
-  }
-
-  return (
-    <div>
-      <BackLink to="/dashboard" label="Back to dashboard" />
-      <h1 className="text-2xl font-semibold mb-6">Saved</h1>
-
-      {!loaded ? (
-        <p className="text-muted">Loading...</p>
-      ) : saved.length === 0 ? (
-        <EmptyState message="Resources you save will show up here." actionLabel="Browse resources" onAction={() => (window.location.href = '/marketplace')} />
-      ) : (
-        <div className="grid md:grid-cols-3 gap-4">
-          {saved.map((item) => (
-            <div key={item.id} className="bg-surface border border-border rounded-lg p-4">
-              <Link to={`/marketplace/${item.resource.id}`} className="font-medium hover:text-accent transition-colors">
-                {item.resource.title}
-              </Link>
-              <p className="text-sm text-muted mt-1">KES {Number(item.resource.price_kes).toLocaleString()}</p>
-              <button onClick={() => remove(item.resource.id)} className="text-xs text-muted hover:text-ink mt-2">
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+async function doFetch(path, options, token) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  const body = await res.json().catch(() => ({}));
+  return { res, body };
 }
+
+async function request(path, options = {}) {
+  const { data } = await supabase.auth.getSession();
+  let token = data.session?.access_token;
+
+  let { res, body } = await doFetch(path, options, token);
+
+  // A 401 here almost always means the access token expired between
+  // page load and this request — getSession() only refreshes if
+  // supabase-js's own expiry check already ran, which can lose a race
+  // right after a long idle tab. One explicit refresh-and-retry clears
+  // the large majority of "random" 401s without the person noticing.
+  if (res.status === 401 && body.code === 'session_expired') {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshed.session) {
+      token = refreshed.session.access_token;
+      ({ res, body } = await doFetch(path, options, token));
+    }
+  }
+      if (!res.ok) {
+    const error = new Error(body.error || 'Request failed.');
+    error.code = body.code;
+    error.status = res.status;
+    throw error;
+  }
+  return body;
+}
+export const api = {
+  get: (path) => request(path),
+  post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
+  put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
+};
+
+export async function getAccessToken() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token;}
