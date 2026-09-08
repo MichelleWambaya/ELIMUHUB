@@ -12,6 +12,7 @@ import paymentsRouter from './routes/payments.js';
 import subscriptionsRouter from './routes/subscriptions.js';
 import notificationsRouter from './routes/notifications.js';
 import settingsRouter from './routes/settings.js';
+import taxonomyRouter from './routes/taxonomy.js';
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api/payments', paymentsRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/taxonomy', taxonomyRouter);
 
 // Keep server errors from leaking internals to the client. Logged
 // server-side (Vercel captures this in the function's logs) rather than
