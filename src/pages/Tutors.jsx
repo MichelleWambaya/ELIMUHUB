@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
+import BackLink from '../components/BackLink';
 import EmptyState from '../components/EmptyState';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
@@ -32,6 +33,7 @@ export default function Tutors() {
     <div>
       <Navbar />
       <div className="max-w-6xl mx-auto px-6 py-10">
+        <BackLink to="/" label="Back to home" />
         <h1 className="text-2xl font-semibold mb-8">Find a tutor</h1>
 
         {!loaded ? (
