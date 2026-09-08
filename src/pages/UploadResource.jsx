@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabaseClient';
+import BackLink from '../components/BackLink';
 
 export default function UploadResource() {
-  const [form, setForm] = useState({ title: '', description: '', price_kes: '' });
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    price_kes: '',
+    category_id: '',
+    subject_id: '',
+    education_level_id: '',
+  });
+  const [taxonomy, setTaxonomy] = useState({ categories: [], subjects: [], education_levels: [] });
   const [resourceId, setResourceId] = useState(null);
   const [file, setFile] = useState(null);
   const [cover, setCover] = useState(null);
@@ -14,6 +23,10 @@ export default function UploadResource() {
   const commission = form.price_kes ? Math.round(Number(form.price_kes) * 0.5) : 0;
   const earnings = form.price_kes ? Number(form.price_kes) - commission : 0;
 
+  useEffect(() => {
+    api.get('/taxonomy').then(setTaxonomy);
+  }, []);
+
   async function authHeader() {
     const { data } = await supabase.auth.getSession();
     return { Authorization: `Bearer ${data.session?.access_token}` };
@@ -23,7 +36,13 @@ export default function UploadResource() {
     e.preventDefault();
     setError('');
     try {
-      const { resource } = await api.post('/resources', { ...form, price_kes: Number(form.price_kes) });
+      const { resource } = await api.post('/resources', {
+        ...form,
+        price_kes: Number(form.price_kes),
+        category_id: form.category_id || null,
+        subject_id: form.subject_id || null,
+        education_level_id: form.education_level_id || null,
+      });
       setResourceId(resource.id);
     } catch (err) {
       setError(err.message);
@@ -95,6 +114,7 @@ export default function UploadResource() {
 
   return (
     <div className="max-w-lg">
+      <BackLink to="/dashboard" label="Back to dashboard" />
       <h1 className="text-2xl font-semibold mb-6">Upload a resource</h1>
 
       {!resourceId ? (
@@ -113,6 +133,40 @@ export default function UploadResource() {
             className="w-full bg-surface border border-border rounded-md px-4 py-2 h-32 focus:border-accent outline-none"
             required
           />
+
+          <div className="grid grid-cols-3 gap-3">
+            <select
+              value={form.category_id}
+              onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+              className="bg-surface border border-border rounded-md px-3 py-2 text-sm focus:border-accent outline-none"
+            >
+              <option value="">Category</option>
+              {taxonomy.categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <select
+              value={form.subject_id}
+              onChange={(e) => setForm({ ...form, subject_id: e.target.value })}
+              className="bg-surface border border-border rounded-md px-3 py-2 text-sm focus:border-accent outline-none"
+            >
+              <option value="">Subject</option>
+              {taxonomy.subjects.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <select
+              value={form.education_level_id}
+              onChange={(e) => setForm({ ...form, education_level_id: e.target.value })}
+              className="bg-surface border border-border rounded-md px-3 py-2 text-sm focus:border-accent outline-none"
+            >
+              <option value="">Level</option>
+              {taxonomy.education_levels.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </div>
+
           <input
             type="number"
             placeholder="Price in KES"
