@@ -7,12 +7,17 @@ export default function Payouts() {
   const [payouts, setPayouts] = useState([]);
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [status, setStatus] = useState('');
 
   async function load() {
-    const [dashboardRes, payoutsRes] = await Promise.all([api.get('/teacher/dashboard'), api.get('/teacher/payouts/mine')]);
-    setDashboard(dashboardRes);
-    setPayouts(payoutsRes.payouts);
+    try {
+      const [dashboardRes, payoutsRes] = await Promise.all([api.get('/teacher/dashboard'), api.get('/teacher/payouts/mine')]);
+      setDashboard(dashboardRes);
+      setPayouts(payoutsRes.payouts);
+    } catch (err) {
+      setLoadError(err.message || 'Could not load payouts.');
+    }
   }
 
   useEffect(() => {
@@ -34,6 +39,7 @@ export default function Payouts() {
     }
   }
 
+  if (loadError) return <p className="text-sm text-red-400">{loadError}</p>;
   if (!dashboard) return <p className="text-muted">Loading...</p>;
 
   return (
