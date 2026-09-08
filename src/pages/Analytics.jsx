@@ -4,11 +4,13 @@ import EmptyState from '../components/EmptyState';
 
 export default function Analytics() {
   const [data, setData] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get('/teacher/analytics').then(setData);
+    api.get('/teacher/analytics').then(setData).catch((err) => setError(err.message || 'Could not load analytics.'));
   }, []);
 
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
   if (!data) return <p className="text-muted">Loading...</p>;
 
   const months = Object.keys(data.revenue_by_month).sort();
