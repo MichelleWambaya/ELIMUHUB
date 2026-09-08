@@ -1,8 +1,39 @@
 import express from 'express';
+import multer from 'multer';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 
 export const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Profile photo. Stored in the public 'avatars' bucket (created by
+// supabase/fixes.sql) since avatars are meant to be visible everywhere
+// a person's name shows up.
+router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image was attached.' });
+  if (!req.file.mimetype.startsWith('image/')) {
+    return res.status(400).json({ error: 'Avatar must be an image file.' });
+  }
+
+  const storagePath = `${req.user.id}/${Date.now()}-${req.file.originalname}`;
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+
+  if (uploadError) return res.status(500).json({ error: uploadError.message });
+
+  const { data: publicUrl } = supabase.storage.from('avatars').getPublicUrl(storagePath);
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ avatar_url: publicUrl.publicUrl })
+    .eq('id', req.user.id)
+    .select('id, full_name, role, avatar_url')
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ profile: data });
+});
 
 const DEFAULTS = {
   theme: 'dark',
